@@ -1,6 +1,7 @@
 {
     "dependencies": {
         "mqtt": "^4.2.6",
-        "warema-wms-venetian-blinds": "1.1.18"
+        "warema-wms-venetian-blinds": "2.0.0",
+        "serialport": "9.2.5"
     }
 }

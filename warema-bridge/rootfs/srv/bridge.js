@@ -9,6 +9,9 @@ process.on('SIGINT', function() {
 const ignoredDevices = process.env.IGNORED_DEVICES ? process.env.IGNORED_DEVICES.split(',') : []
 const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
 
+const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
+const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
+
 const settingsPar = {
     wmsChannel   : process.env.WMS_CHANNEL     || 17,
     wmsKey       : process.env.WMS_KEY         || '00112233445566778899AABBCCDDEEFF',
@@ -18,10 +21,11 @@ const settingsPar = {
 
 var registered_shades = []
 var shade_position = []
+var last_weather_data_published = new Date(0);
 
 function registerDevice(element) {
   console.log('Registering ' + element.snr)
-  var topic = 'homeassistant/cover/' + element.snr + '/' + element.snr + '/config'
+  var topic = hassTopicPrefix + '/cover/' + element.snr + '/' + element.snr + '/config'
   var availability_topic = 'warema/' + element.snr + '/availability'
 
   var base_payload = {
@@ -141,6 +145,59 @@ function registerDevices() {
   }
 }
 
+function timeToPublishWeatherData() {
+  return ((new Date().getTime() - last_weather_data_published.getTime()) / 1000) > weatherDataPushIntervall
+}
+
+function handleWeatherBroadcast(msg) {
+
+  if (registered_shades.includes(msg.payload.weather.snr)) {
+    if (timeToPublishWeatherData()) {
+      client.publish('warema/' + msg.payload.weather.snr + '/illuminance/state', msg.payload.weather.lumen.toString())
+      client.publish('warema/' + msg.payload.weather.snr + '/temperature/state', msg.payload.weather.temp.toString())
+      last_weather_data_published = new Date()
+    }
+  } else {
+    var availability_topic = 'warema/' + msg.payload.weather.snr + '/availability'
+    var payload = {
+      name: msg.payload.weather.snr,
+      availability: [
+        { topic: 'warema/bridge/state' },
+        { topic: availability_topic }
+      ],
+      device: {
+        identifiers: msg.payload.weather.snr,
+        manufacturer: 'Warema',
+        model: 'Weather Station',
+        name: msg.payload.weather.snr
+      },
+      force_update: true
+    }
+
+    var illuminance_payload = {
+      ...payload,
+      state_topic: 'warema/' + msg.payload.weather.snr + '/illuminance/state',
+      device_class: 'illuminance',
+      unique_id: msg.payload.weather.snr + '_illuminance',
+      unit_of_measurement: 'lm',
+    }
+    client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/illuminance/config', JSON.stringify(illuminance_payload))
+
+    var temperature_payload = {
+      ...payload,
+      state_topic: 'warema/' + msg.payload.weather.snr + '/temperature/state',
+      device_class: 'temperature',
+      unique_id: msg.payload.weather.snr + '_temperature',
+      unit_of_measurement: 'C',
+    }
+    client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/temperature/config', JSON.stringify(temperature_payload))
+
+    client.publish(availability_topic, 'online', { retain: true })
+    registered_shades += msg.payload.weather.snr
+  }
+
+}
+
 function callback(err, msg) {
   if(err) {
     console.log('ERROR: ' + err);
@@ -153,47 +210,7 @@ function callback(err, msg) {
         stickUsb.setPosUpdInterval(30000);
         break
       case 'wms-vb-rcv-weather-broadcast':
-        if (registered_shades.includes(msg.payload.weather.snr)) {
-          client.publish('warema/' + msg.payload.weather.snr + '/illuminance/state', msg.payload.weather.lumen.toString())
-          client.publish('warema/' + msg.payload.weather.snr + '/temperature/state', msg.payload.weather.temp.toString())
-        } else {
-          var availability_topic = 'warema/' + msg.payload.weather.snr + '/availability'
-          var payload = {
-            name: msg.payload.weather.snr,
-            availability: [
-              {topic: 'warema/bridge/state'},
-              {topic: availability_topic}
-            ],
-            device: {
-              identifiers: msg.payload.weather.snr,
-              manufacturer: 'Warema',
-              model: 'Weather Station',
-              name: msg.payload.weather.snr
-            },
-            force_update: true
-          }
-
-          var illuminance_payload = {
-            ...payload,
-            state_topic: 'warema/' + msg.payload.weather.snr + '/illuminance/state',
-            device_class: 'illuminance',
-            unique_id: msg.payload.weather.snr + '_illuminance',
-            unit_of_measurement: 'lm',
-          }
-          client.publish('homeassistant/sensor/' + msg.payload.weather.snr + '/illuminance/config', JSON.stringify(illuminance_payload))
-
-          var temperature_payload = {
-            ...payload,
-            state_topic: 'warema/' + msg.payload.weather.snr + '/temperature/state',
-            device_class: 'temperature',
-            unique_id: msg.payload.weather.snr + '_temperature',
-            unit_of_measurement: 'C',
-          }
-          client.publish('homeassistant/sensor/' + msg.payload.weather.snr + '/temperature/config', JSON.stringify(temperature_payload))
-
-          client.publish(availability_topic, 'online', {retain: true})
-          registered_shades += msg.payload.weather.snr
-        }
+        handleWeatherBroadcast(msg)
         break
       case 'wms-vb-blind-position-update':
         client.publish('warema/' + msg.payload.snr + '/position', msg.payload.position.toString())
@@ -256,10 +273,10 @@ client.on('message', function (topic, message) {
       case 'set':
         switch (message.toString()) {
           case 'CLOSE':
-            stickUsb.vnBlindSetPosition(device, 100)
+            stickUsb.vnBlindSetPosition(device, 100, 0)
             break;
           case 'OPEN':
-            stickUsb.vnBlindSetPosition(device, 0)
+            stickUsb.vnBlindSetPosition(device, 0, 0)
             break;
           case 'STOP':
             stickUsb.vnBlindStop(device)
