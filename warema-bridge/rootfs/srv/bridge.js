@@ -155,6 +155,7 @@ function handleWeatherBroadcast(msg) {
     if (timeToPublishWeatherData()) {
       client.publish('warema/' + msg.payload.weather.snr + '/illuminance/state', msg.payload.weather.lumen.toString())
       client.publish('warema/' + msg.payload.weather.snr + '/temperature/state', msg.payload.weather.temp.toString())
+      client.publish('warema/' + msg.payload.weather.snr + '/wind/state', msg.payload.weather.wind.toString())
       last_weather_data_published = new Date()
     }
   } else {
@@ -191,6 +192,16 @@ function handleWeatherBroadcast(msg) {
       unit_of_measurement: 'C',
     }
     client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/temperature/config', JSON.stringify(temperature_payload))
+
+    var wind_payload = {
+      ...payload,
+      state_topic: 'warema/' + msg.payload.weather.snr + '/wind/state',
+      icon: 'mdi:weather-windy',
+      name: 'Wind',
+      unique_id: msg.payload.weather.snr + '_wind',
+      unit_of_measurement: 'km/h',
+    }
+    client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/wind/config', JSON.stringify(wind_payload))
 
     client.publish(availability_topic, 'online', { retain: true })
     registered_shades += msg.payload.weather.snr
@@ -249,7 +260,7 @@ var stickUsb
 client.on('connect', function (connack) {
   console.log('Connected to MQTT')
   client.subscribe('warema/#')
-  client.subscribe('homeassistant/status')
+  client.subscribe('hass/status')
   stickUsb = new warema(settingsPar.wmsSerialPort,
     settingsPar.wmsChannel,
     settingsPar.wmsPanid,
