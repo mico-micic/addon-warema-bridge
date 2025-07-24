@@ -266,7 +266,8 @@ var client = mqtt.connect(
   process.env.MQTT_SERVER,
   {
     username: process.env.MQTT_USER,
-    password: process.env.MQTT_PASSWORD,
+    password: prociess.env.MQTT_PASSWORD,
+    protocolVersion: 5,
     will: {
       topic: 'warema/bridge/state',
       payload: 'online',
