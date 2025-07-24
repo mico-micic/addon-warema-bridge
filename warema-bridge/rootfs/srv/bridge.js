@@ -273,7 +273,7 @@ var stickUsb
 
 client.on('connect', function (connack) {
   console.log('Connected to MQTT')
-  client.subscribe('warema/#')
+  client.subscribe('warema/#', { 'nl': true })
   client.subscribe('homeassistant/status')
   stickUsb = new warema(settingsPar.wmsSerialPort,
     settingsPar.wmsChannel,
@@ -315,7 +315,7 @@ client.on('message', function (topic, message) {
         stickUsb.vnBlindSetPosition(device, parseInt(shade_position[device]['position']), parseInt(message))
         break
       default:
-        console.log('Unrecognised command from HA')
+        console.log('Unrecognised command from HA', command, topic, message.toString())
     }
   } else if (scope == 'homeassistant') {
     if (topic.split('/')[1] == 'status' && message.toString() == 'online') {
