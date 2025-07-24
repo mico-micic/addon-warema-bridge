@@ -7,7 +7,17 @@ process.on('SIGINT', function() {
 
 
 const ignoredDevices = process.env.IGNORED_DEVICES ? process.env.IGNORED_DEVICES.split(',') : []
-const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
+// const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
+
+const forceDevices = [
+  {
+    "snr": 1448309,
+    "type": 20
+  }
+]
+
+const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
+const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
 
 const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
 const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
@@ -19,6 +29,7 @@ const settingsPar = {
     wmsSerialPort: process.env.WMS_SERIAL_PORT || '/dev/ttyUSB0',
   };
 
+var weatherFirstPushed = false
 var registered_shades = []
 var shade_position = []
 var last_weather_data_published = new Date(0);
@@ -63,6 +74,7 @@ function registerDevice(element) {
       model = 'Plug receiver'
       payload = {
         ...base_payload,
+        name: 'receiver',
         device: {
           ...base_device,
           model: model
@@ -71,13 +83,13 @@ function registerDevice(element) {
         position_closed: 100,
         command_topic: 'warema/' + element.snr + '/set',
         position_topic: 'warema/' + element.snr + '/position',
-        tilt_status_topic: 'warema/' + element.snr + '/tilt',
+        //tilt_status_topic: 'warema/' + element.snr + '/tilt',
         set_position_topic: 'warema/' + element.snr + '/set_position',
-        tilt_command_topic: 'warema/' + element.snr + '/set_tilt',
-        tilt_closed_value: -100,
-        tilt_opened_value: 100,
-        tilt_min: -100,
-        tilt_max: 100,
+        //tilt_command_topic: 'warema/' + element.snr + '/set_tilt',
+        //tilt_closed_value: -100,
+        //tilt_opened_value: 100,
+        //tilt_min: -100,
+        //tilt_max: 100,
       }
       break
     case 21:
@@ -135,9 +147,10 @@ function registerDevice(element) {
 }
 
 function registerDevices() {
+  console.log('Registering devices')
   if (forceDevices && forceDevices.length) {
     forceDevices.forEach(element => {
-      registerDevice({snr: element, type: 25})
+      registerDevice(element)
     })
   } else {
     console.log('Scanning...')
@@ -146,7 +159,7 @@ function registerDevices() {
 }
 
 function timeToPublishWeatherData() {
-  return ((new Date().getTime() - last_weather_data_published.getTime()) / 1000) > weatherDataPushIntervall
+  return ((new Date().getTime() - last_weather_data_published.getTime()) / 1000) > weatherDataPushIntervall || weatherFirstPushed == false
 }
 
 function handleWeatherBroadcast(msg) {
@@ -157,6 +170,7 @@ function handleWeatherBroadcast(msg) {
       client.publish('warema/' + msg.payload.weather.snr + '/temperature/state', msg.payload.weather.temp.toString())
       client.publish('warema/' + msg.payload.weather.snr + '/wind/state', msg.payload.weather.wind.toString())
       last_weather_data_published = new Date()
+      weatherFirstPushed = true;
     }
   } else {
     var availability_topic = 'warema/' + msg.payload.weather.snr + '/availability'
@@ -179,8 +193,9 @@ function handleWeatherBroadcast(msg) {
       ...payload,
       state_topic: 'warema/' + msg.payload.weather.snr + '/illuminance/state',
       device_class: 'illuminance',
+      name: 'illuminance',
       unique_id: msg.payload.weather.snr + '_illuminance',
-      unit_of_measurement: 'lm',
+      unit_of_measurement: 'lx',
     }
     client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/illuminance/config', JSON.stringify(illuminance_payload))
 
@@ -188,8 +203,9 @@ function handleWeatherBroadcast(msg) {
       ...payload,
       state_topic: 'warema/' + msg.payload.weather.snr + '/temperature/state',
       device_class: 'temperature',
+      name: 'temp',
       unique_id: msg.payload.weather.snr + '_temperature',
-      unit_of_measurement: 'C',
+      unit_of_measurement: '°C',
     }
     client.publish(hassTopicPrefix + '/sensor/' + msg.payload.weather.snr + '/temperature/config', JSON.stringify(temperature_payload))
 
@@ -197,7 +213,7 @@ function handleWeatherBroadcast(msg) {
       ...payload,
       state_topic: 'warema/' + msg.payload.weather.snr + '/wind/state',
       icon: 'mdi:weather-windy',
-      name: 'Wind',
+      name: 'wind',
       unique_id: msg.payload.weather.snr + '_wind',
       unit_of_measurement: 'km/h',
     }
@@ -210,10 +226,12 @@ function handleWeatherBroadcast(msg) {
 }
 
 function callback(err, msg) {
+  //console.log('callback err_va:', err, 'msg_val:', msg);
   if(err) {
     console.log('ERROR: ' + err);
   }
   if(msg) {
+    console.log('Message topic: ' + msg.topic)
     switch (msg.topic) {
       case 'wms-vb-init-completion':
         console.log('Warema init completed')
@@ -225,7 +243,7 @@ function callback(err, msg) {
         break
       case 'wms-vb-blind-position-update':
         client.publish('warema/' + msg.payload.snr + '/position', msg.payload.position.toString())
-        client.publish('warema/' + msg.payload.snr + '/tilt', msg.payload.angle.toString())
+        // client.publish('warema/' + msg.payload.snr + '/tilt', msg.payload.angle.toString())
         shade_position[msg.payload.snr] = {
           position: msg.payload.position,
           angle: msg.payload.angle
@@ -249,7 +267,7 @@ var client = mqtt.connect(
     password: process.env.MQTT_PASSWORD,
     will: {
       topic: 'warema/bridge/state',
-      payload: 'offline',
+      payload: 'online',
       retain: true
     }
   }
@@ -305,7 +323,11 @@ client.on('message', function (topic, message) {
     }
   } else if (scope == 'homeassistant') {
     if (topic.split('/')[1] == 'status' && message.toString() == 'online') {
-      registerDevices()
+      console.log('Homeassistant status changed to ONLINE')
+      registered_shades = []
+      weatherFirstPushed = false
+      registerDevices();
+      stickUsb.vnBlindGetPosition();      
     }
   }
 })
