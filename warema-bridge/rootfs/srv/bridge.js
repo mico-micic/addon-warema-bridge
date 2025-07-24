@@ -19,6 +19,9 @@ const forceDevices = [
 const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
 const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
 
+const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
+const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
+
 const settingsPar = {
     wmsChannel   : process.env.WMS_CHANNEL     || 17,
     wmsKey       : process.env.WMS_KEY         || '00112233445566778899AABBCCDDEEFF',
@@ -275,7 +278,7 @@ var stickUsb
 client.on('connect', function (connack) {
   console.log('Connected to MQTT')
   client.subscribe('warema/#')
-  client.subscribe('homeassistant/status')
+  client.subscribe('hass/status')
   stickUsb = new warema(settingsPar.wmsSerialPort,
     settingsPar.wmsChannel,
     settingsPar.wmsPanid,
