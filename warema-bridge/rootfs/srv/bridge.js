@@ -1,10 +1,9 @@
 const warema = require('warema-wms-venetian-blinds');
 var mqtt = require('mqtt')
 
-process.on('SIGINT', function() {
-    process.exit(0);
+process.on('SIGINT', function () {
+  process.exit(0);
 });
-
 
 const ignoredDevices = process.env.IGNORED_DEVICES ? process.env.IGNORED_DEVICES.split(',') : []
 // const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
@@ -19,15 +18,12 @@ const forceDevices = [
 const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
 const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
 
-const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
-const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
-
 const settingsPar = {
-    wmsChannel   : process.env.WMS_CHANNEL     || 17,
-    wmsKey       : process.env.WMS_KEY         || '00112233445566778899AABBCCDDEEFF',
-    wmsPanid     : process.env.WMS_PAN_ID      || 'FFFF',
-    wmsSerialPort: process.env.WMS_SERIAL_PORT || '/dev/ttyUSB0',
-  };
+  wmsChannel: process.env.WMS_CHANNEL || 17,
+  wmsKey: process.env.WMS_KEY || '00112233445566778899AABBCCDDEEFF',
+  wmsPanid: process.env.WMS_PAN_ID || 'FFFF',
+  wmsSerialPort: process.env.WMS_SERIAL_PORT || '/dev/ttyUSB0',
+};
 
 var weatherFirstPushed = false
 var registered_shades = []
@@ -42,8 +38,8 @@ function registerDevice(element) {
   var base_payload = {
     name: element.snr,
     availability: [
-      {topic: 'warema/bridge/state'},
-      {topic: availability_topic}
+      { topic: 'warema/bridge/state' },
+      { topic: availability_topic }
     ],
     unique_id: element.snr
   }
@@ -141,7 +137,7 @@ function registerDevice(element) {
 
     stickUsb.vnBlindAdd(parseInt(element.snr), element.snr.toString());
     registered_shades += element.snr
-    client.publish(availability_topic, 'online', {retain: true})
+    client.publish(availability_topic, 'online', { retain: true })
   }
   client.publish(topic, JSON.stringify(payload))
 }
@@ -154,7 +150,7 @@ function registerDevices() {
     })
   } else {
     console.log('Scanning...')
-    stickUsb.scanDevices({autoAssignBlinds: false});
+    stickUsb.scanDevices({ autoAssignBlinds: false });
   }
 }
 
@@ -222,15 +218,15 @@ function handleWeatherBroadcast(msg) {
     client.publish(availability_topic, 'online', { retain: true })
     registered_shades += msg.payload.weather.snr
   }
-
 }
 
 function callback(err, msg) {
   //console.log('callback err_va:', err, 'msg_val:', msg);
-  if(err) {
+  if (err) {
     console.log('ERROR: ' + err);
   }
-  if(msg) {
+  
+  if (msg) {
     console.log('Message topic: ' + msg.topic)
     switch (msg.topic) {
       case 'wms-vb-init-completion':
@@ -278,7 +274,7 @@ var stickUsb
 client.on('connect', function (connack) {
   console.log('Connected to MQTT')
   client.subscribe('warema/#')
-  client.subscribe('hass/status')
+  client.subscribe('homeassistant/status')
   stickUsb = new warema(settingsPar.wmsSerialPort,
     settingsPar.wmsChannel,
     settingsPar.wmsPanid,
@@ -318,8 +314,8 @@ client.on('message', function (topic, message) {
       case 'set_tilt':
         stickUsb.vnBlindSetPosition(device, parseInt(shade_position[device]['position']), parseInt(message))
         break
-      //default:
-      //  console.log('Unrecognised command from HA')
+      default:
+        console.log('Unrecognised command from HA')
     }
   } else if (scope == 'homeassistant') {
     if (topic.split('/')[1] == 'status' && message.toString() == 'online') {
@@ -327,7 +323,7 @@ client.on('message', function (topic, message) {
       registered_shades = []
       weatherFirstPushed = false
       registerDevices();
-      stickUsb.vnBlindGetPosition();      
+      stickUsb.vnBlindGetPosition();
     }
   }
 })
