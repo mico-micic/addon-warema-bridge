@@ -6,15 +6,7 @@ process.on('SIGINT', function () {
 });
 
 const ignoredDevices = process.env.IGNORED_DEVICES ? process.env.IGNORED_DEVICES.split(',') : []
-// const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
-
-const forceDevices = [
-  {
-    "snr": 1448309,
-    "type": 20
-  }
-]
-
+const forceDevices = process.env.FORCE_DEVICES ? process.env.FORCE_DEVICES.split(',') : []
 const weatherDataPushIntervall = process.env.WEATHER_PUSH_INTERVALL || 600
 const hassTopicPrefix = process.env.HASS_TOPIC_PREFIX || 'homeassistant'
 
@@ -24,6 +16,18 @@ const settingsPar = {
   wmsPanid: process.env.WMS_PAN_ID || 'FFFF',
   wmsSerialPort: process.env.WMS_SERIAL_PORT || '/dev/ttyUSB0',
 };
+
+console.log(`Using following settings`)
+console.log(`-----------------------------------------`)
+console.log(`WMS channel: ${wmsChannel}`)
+console.log(`WMS key: ${wmsKey}`)
+console.log(`WMS pan id: ${wmsPanid}`)
+console.log(`WMS srial port: ${wmsSerialPort}`)
+console.log(`HASS topic prefix: ${hassTopicPrefix}`)
+console.log(`Weather data push interval: ${weatherDataPushIntervall}`)
+console.log(`Ignored devices: ${ignoredDevices}`)
+console.log(`Forced devices: ${forceDevices}`)
+console.log(`-----------------------------------------`)
 
 var weatherFirstPushed = false
 var registered_shades = []
@@ -146,7 +150,7 @@ function registerDevices() {
   console.log('Registering devices')
   if (forceDevices && forceDevices.length) {
     forceDevices.forEach(element => {
-      registerDevice(element)
+      registerDevice({snr: element.split(':')[0], type: element.split(':')[1] ? element.split(':')[1] : 25 })
     })
   } else {
     console.log('Scanning...')
@@ -162,6 +166,7 @@ function handleWeatherBroadcast(msg) {
 
   if (registered_shades.includes(msg.payload.weather.snr)) {
     if (timeToPublishWeatherData()) {
+      console.log('Publishing weather data...')
       client.publish('warema/' + msg.payload.weather.snr + '/illuminance/state', msg.payload.weather.lumen.toString())
       client.publish('warema/' + msg.payload.weather.snr + '/temperature/state', msg.payload.weather.temp.toString())
       client.publish('warema/' + msg.payload.weather.snr + '/wind/state', msg.payload.weather.wind.toString())
@@ -169,6 +174,7 @@ function handleWeatherBroadcast(msg) {
       weatherFirstPushed = true;
     }
   } else {
+    console.log('Registering weather station')
     var availability_topic = 'warema/' + msg.payload.weather.snr + '/availability'
     var payload = {
       name: msg.payload.weather.snr,
@@ -227,7 +233,7 @@ function callback(err, msg) {
   }
   
   if (msg) {
-    console.log('Message topic: ' + msg.topic)
+    //console.log('Message topic: ' + msg.topic)
     switch (msg.topic) {
       case 'wms-vb-init-completion':
         console.log('Warema init completed')
