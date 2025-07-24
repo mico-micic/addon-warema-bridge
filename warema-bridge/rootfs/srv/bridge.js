@@ -321,6 +321,12 @@ client.on('message', function (topic, message) {
       case 'set_tilt':
         stickUsb.vnBlindSetPosition(device, parseInt(shade_position[device]['position']), parseInt(message))
         break
+      case 'availability': 
+      case 'state': 
+      case 'illuminance': 
+      case 'wind': 
+        // Skip own messages
+        break;
       default:
         console.log('Unrecognised command from HA', command, topic, message.toString())
     }
